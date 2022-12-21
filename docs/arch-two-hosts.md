@@ -64,17 +64,3 @@ Likewise, the _delete action_ operation is optional, because the action might be
 The list apps procedure is triggered by a device app during the initialization phase of the client app. It allows the device app to retrieve information about the MEC apps that are supported by the MEC system, together with additional information that might be useful to the clients, such as the versions available. In the sequence diagram below we assume that the up-to-date information on the MEC apps is stored in the KVS.
 
 ![](../figures/diagrams-list-apps.png)
-
-## Acronyms
-
-| Acronym | Explanation                      |
-| ------- | -------------------------------- |
-| AAA     | Authentication and Authorization |
-| FaaS    | Function-as-a-Service            |
-| KME     | Key Management Entity            |
-| KVS     | Key-Value Store                  |
-| LCMP    | Life Cycle Management Proxy      |
-| MEC     | Multi-Access Edge Computing      |
-| MEO     | MEC Orchestrator                 |
-| QKD     | Quantum Key Distribution         |
-| QKDE    | QKD Entity                       |
