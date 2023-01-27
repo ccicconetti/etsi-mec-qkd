@@ -1,2 +1,7 @@
 *.bkp
 *.dtmp
+
+# Added by cargo
+
+/target
+/Cargo.lock
