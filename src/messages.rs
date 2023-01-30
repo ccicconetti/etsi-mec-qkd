@@ -8,6 +8,9 @@ use actix_web::App;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fmt::{Display, Formatter};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 /// Validate a message (or element thereof).
 pub trait Validate {
@@ -164,6 +167,7 @@ struct AppList {
 }
 
 /// ApplicationList message used to retrieve the apps from the LCM proxy
+#[derive(Serialize, Deserialize)]
 struct ApplicationList {
     /// List of user applications available to the device application.
     appList: Vec<AppList>,
@@ -572,6 +576,27 @@ mod tests {
         };
         assert_eq!(Ok(()), a.validate());
         println!("{}", a);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_message_application_list_to_json() {
+        let a = ApplicationList {
+            appList: vec![AppList {
+                appInfo: default_app_info(),
+                vendorSpecificExt: None,
+            }],
+        };
+
+        let filename = "application_list.json";
+        if Path::new(filename).exists() {
+            println!("will not overwrite: {}", filename);
+            return;
+        }
+        let mut f = File::create(filename).expect("could not create file");
+        let j = serde_json::to_string(&a).expect("could not serialize");
+        f.write(j.as_bytes()).expect("could not write to file");
+        println!("written:\n{}", a);
     }
 
     #[test]
