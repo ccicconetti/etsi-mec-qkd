@@ -4,7 +4,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-use actix_web::App;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fmt::{Display, Formatter};
