@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 
 /// Validate a message (or element thereof).
@@ -63,14 +63,14 @@ where
 ///         ]
 ///     ]
 /// }
-#[derive(Serialize, Deserialize)]
-struct Polygon {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Polygon {
     coordinates: Vec<Vec<Vec<f64>>>,
 }
 
 /// civicAddressElement in a LocationConstraints informantion element
-#[derive(Serialize, Deserialize)]
-struct CivicAddressElement {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CivicAddressElement {
     /// Describe the content type of caValue.
     /// The value of caType shall comply with section 3.4 of IETF RFC 4776.
     caType: i32,
@@ -80,8 +80,8 @@ struct CivicAddressElement {
 }
 
 /// LocationConstraints information element
-#[derive(Serialize, Deserialize)]
-struct LocationConstraints {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LocationConstraints {
     /// The two-letter ISO 3166 [7] country code in capital letters.
     /// Shall be present in case the "area" attribute is absent.
     /// May be absent if the "area" attribute is present.
@@ -100,8 +100,8 @@ struct LocationConstraints {
 /// The application characteristics relate to the system resources consumed by the application.
 /// A device application can use this information e.g. for estimating
 /// the cost of use of the application or for the expected user experience.
-#[derive(Serialize, Deserialize)]
-struct AppCharcs {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AppCharcs {
     /// The maximum size in Mbytes of the memory resource expected to be used
     /// by the MEC application instance in the MEC system.
     memory: Option<u32>,
@@ -120,8 +120,8 @@ struct AppCharcs {
 }
 
 /// appInfo field used in the ApplicationList message
-#[derive(Serialize, Deserialize)]
-struct AppInfo {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AppInfo {
     /// Identifier of this MEC application descriptor.
     /// It is equivalent to the appDId defined in clause 6.2.1.2 of ETSI GS MEC 010-2 [1].
     /// This attribute shall be globally unique.
@@ -148,8 +148,8 @@ struct AppInfo {
 }
 
 /// Extension for vendor specific information, used in the ApplicationsList message.
-#[derive(Serialize, Deserialize)]
-struct VendorSpecificExt {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VendorSpecificExt {
     /// Vendor identifier.
     /// The length of the value shall not exceed 32 characters.
     /// The rest of the structure of vendor specific extension is not defined.
@@ -157,8 +157,8 @@ struct VendorSpecificExt {
 }
 
 /// Inline structurre in the ApplicationList message.
-#[derive(Serialize, Deserialize)]
-struct AppList {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AppList {
     /// Application information.
     appInfo: AppInfo,
     /// Extension for vendor specific information.
@@ -166,10 +166,16 @@ struct AppList {
 }
 
 /// ApplicationList message used to retrieve the apps from the LCM proxy
-#[derive(Serialize, Deserialize)]
-struct ApplicationList {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ApplicationList {
     /// List of user applications available to the device application.
-    appList: Vec<AppList>,
+    pub appList: Vec<AppList>,
+}
+
+impl ApplicationList {
+    pub fn empty() -> Self {
+        Self { appList: vec![] }
+    }
 }
 
 impl Validate for Polygon {
@@ -415,6 +421,13 @@ impl Display for ApplicationList {
         let apps: Vec<String> = self.appList.iter().map(|x| x.to_string()).collect();
         write!(f, "{}", apps.join("\n"))
     }
+}
+
+pub fn application_list_from_file(file: &mut File) -> std::io::Result<ApplicationList> {
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
+    let j: ApplicationList = serde_json::from_str(content.as_str())?;
+    Ok(j)
 }
 
 #[cfg(test)]
