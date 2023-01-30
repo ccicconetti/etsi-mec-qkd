@@ -3,7 +3,12 @@ name = "etsi-mec-qkd"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "lcmp"
+path = "src/bin/lcmp.rs"
+
 [dependencies]
 actix-web = "4"
+clap = { version = "4.1.4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

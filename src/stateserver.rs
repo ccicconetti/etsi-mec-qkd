@@ -1,14 +1,13 @@
 //! Server that keeps the internal state of the system components.
 
 use crate::messages::{application_list_from_file, ApplicationList};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::fs::File;
 use std::io::Write;
 
 /// Return the current ApplicationList to be returned the device apps.
 pub trait ApplicationListServer {
     fn application_list(&self) -> Result<ApplicationList, String>;
+    fn status(&self) -> Result<(), String>;
 }
 
 /// Static ApplicationList store.
@@ -56,6 +55,31 @@ impl ApplicationListServer for StaticApplicationListServer {
             },
         }
     }
+    fn status(&self) -> Result<(), String> {
+        match &self.last_err {
+            Some(x) => Err(x.clone()),
+            None => Ok(()),
+        }
+    }
+}
+
+/// Factory to build ApplicationListServer objects from a string
+pub fn build_application_list_server(
+    value: &str,
+) -> Result<Box<dyn ApplicationListServer + Send + Sync>, String> {
+    if let Some(x) = value.find("static;") {
+        if x == 0 {
+            let rhs = &value[7..];
+            if let Some(x) = rhs.find("file=") {
+                if x == 0 {
+                    return Ok(Box::new(StaticApplicationListServer::from_file(
+                        &value[12..],
+                    )));
+                }
+            }
+        }
+    }
+    Err("could not create the ApplicationListServer".to_string())
 }
 
 #[cfg(test)]
@@ -87,6 +111,21 @@ mod tests {
             .as_bytes(),
         )?;
         Ok(())
+    }
+
+    #[test]
+    fn test_build_application_list_server() {
+        let a = build_application_list_server("non-existing-type");
+        assert!(a.is_err());
+
+        let a = build_application_list_server("static;aaa");
+        assert!(a.is_err());
+
+        let a = build_application_list_server("static;file");
+        assert!(a.is_err());
+
+        let a = build_application_list_server("static;file=non-existing");
+        assert!(a.is_ok());
     }
 
     #[test]
