@@ -1,8 +1,11 @@
 use actix_web::http::header::ContentType;
-use actix_web::{get, guard, web, App, HttpResponse, HttpServer, Responder, Result};
+use actix_web::{
+    get, guard, middleware::Logger, web, App, HttpResponse, HttpServer, Responder, Result,
+};
 use clap::Parser;
 use etsi_mec_qkd::messages::{ApplicationListInfo, ProblemDetails, Validate};
 use etsi_mec_qkd::stateserver::{build_application_list_server, ApplicationListServer};
+use log::{debug, error, info, log_enabled, Level};
 use serde::Deserialize;
 use std::sync::Mutex;
 
@@ -40,7 +43,6 @@ async fn app_list(
             .insert_header(ContentType::json())
             .body(serde_json::to_string(&p).unwrap_or_default());
     }
-    println!("{}", info);
     match data.app_list_server.lock().unwrap().application_list() {
         Ok(x) => HttpResponse::Ok()
             .insert_header(ContentType::json())
@@ -60,16 +62,21 @@ async fn main() -> std::io::Result<()> {
         ),
     });
 
-    println!(
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
+    info!(
         "starting HTTP server with {} workers at {}",
         args.workers, args.address
     );
     HttpServer::new(move || {
-        App::new().app_data(state.clone()).service(
-            web::resource("/dev_app/v1/app_list")
-                .guard(guard::Header("content-type", "application/json"))
-                .route(web::get().to(app_list)),
-        )
+        App::new()
+            .wrap(Logger::default())
+            .app_data(state.clone())
+            .service(
+                web::resource("/dev_app/v1/app_list")
+                    .guard(guard::Header("content-type", "application/json"))
+                    .route(web::get().to(app_list)),
+            )
     })
     .bind(args.address)?
     .workers(args.workers)
