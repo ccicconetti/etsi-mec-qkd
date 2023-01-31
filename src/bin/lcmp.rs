@@ -6,7 +6,7 @@ use etsi_mec_qkd::stateserver::{build_application_list_server, ApplicationListSe
 use log::info;
 use std::sync::Mutex;
 
-/// A ETSI MEC Life Cycle Management Proxy
+/// An ETSI MEC Life Cycle Management Proxy
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {

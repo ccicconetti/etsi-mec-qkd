@@ -1,3 +1,5 @@
+//! HTTP test and utilities
+
 use actix_web::{get, post, HttpResponse, HttpServer, Responder};
 
 #[cfg(test)]
