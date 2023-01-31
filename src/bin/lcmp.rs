@@ -1,12 +1,9 @@
 use actix_web::http::header::ContentType;
-use actix_web::{
-    get, guard, middleware::Logger, web, App, HttpResponse, HttpServer, Responder, Result,
-};
+use actix_web::{guard, middleware::Logger, web, App, HttpResponse, HttpServer};
 use clap::Parser;
 use etsi_mec_qkd::messages::{ApplicationListInfo, ProblemDetails, Validate};
 use etsi_mec_qkd::stateserver::{build_application_list_server, ApplicationListServer};
-use log::{debug, error, info, log_enabled, Level};
-use serde::Deserialize;
+use log::info;
 use std::sync::Mutex;
 
 /// A ETSI MEC Life Cycle Management Proxy
@@ -43,7 +40,12 @@ async fn app_list(
             .insert_header(ContentType::json())
             .body(serde_json::to_string(&p).unwrap_or_default());
     }
-    match data.app_list_server.lock().unwrap().application_list() {
+    match data
+        .app_list_server
+        .lock()
+        .unwrap()
+        .application_list(info.0)
+    {
         Ok(x) => HttpResponse::Ok()
             .insert_header(ContentType::json())
             .body(serde_json::to_string(&x).unwrap_or_default()),

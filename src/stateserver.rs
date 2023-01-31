@@ -1,12 +1,12 @@
 //! Server that keeps the internal state of the system components.
 
-use crate::messages::{application_list_from_file, ApplicationList};
+use crate::messages::{application_list_from_file, ApplicationList, ApplicationListInfo};
 use std::fs::File;
 use std::io::Write;
 
 /// Return the current ApplicationList to be returned the device apps.
 pub trait ApplicationListServer {
-    fn application_list(&self) -> Result<ApplicationList, String>;
+    fn application_list(&self, info: ApplicationListInfo) -> Result<ApplicationList, String>;
     fn status(&self) -> Result<(), String>;
 }
 
@@ -46,15 +46,20 @@ impl StaticApplicationListServer {
 }
 
 impl ApplicationListServer for StaticApplicationListServer {
-    fn application_list(&self) -> Result<ApplicationList, String> {
+    /// Return an ApplicationList message containing only the matching query.
+    fn application_list(&self, info: ApplicationListInfo) -> Result<ApplicationList, String> {
         match &self.last_err {
             Some(err) => Err(err.clone()),
             None => match &self.app_list {
-                Some(x) => Ok(x.clone()),
+                Some(x) => Ok(ApplicationList {
+                    appList: x.matching_info(&info),
+                }),
                 None => Ok(ApplicationList::empty()),
             },
         }
     }
+
+    /// Return the status based on the last apps configuration.
     fn status(&self) -> Result<(), String> {
         match &self.last_err {
             Some(x) => Err(x.clone()),
@@ -86,7 +91,7 @@ pub fn build_application_list_server(
 mod tests {
     use super::*;
 
-    const APP_LIST_JSON_FILE: &str = "application_list.json";
+    const APP_LIST_JSON_FILE: &str = "to_remove.json";
 
     fn write_example_application_list_to_file() -> Result<(), std::io::Error> {
         let mut f = File::create(APP_LIST_JSON_FILE)?;
@@ -131,12 +136,12 @@ mod tests {
     #[test]
     fn test_static_application_list_server() -> Result<(), String> {
         let s = StaticApplicationListServer::empty();
-        let a = s.application_list()?;
+        let a = s.application_list(ApplicationListInfo::empty())?;
         assert!(a.appList.is_empty());
 
         write_example_application_list_to_file().expect("could not write file");
         let s = StaticApplicationListServer::from_file(APP_LIST_JSON_FILE);
-        let a = s.application_list()?;
+        let a = s.application_list(ApplicationListInfo::empty())?;
         assert_eq!(1, a.appList.len());
         println!("{}", a.appList[0]);
         std::fs::remove_file(APP_LIST_JSON_FILE).expect("could not remove file");

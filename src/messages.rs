@@ -169,6 +169,14 @@ pub struct VendorSpecificExt {
     vendorId: String,
 }
 
+impl VendorSpecificExt {
+    fn empty() -> Self {
+        Self {
+            vendorId: "".to_owned(),
+        }
+    }
+}
+
 /// Inline structurre in the ApplicationList message.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AppList {
@@ -186,7 +194,7 @@ pub struct ApplicationList {
 }
 
 /// URI query parameters supported by the GET method on:
-/// ```
+/// ```text
 ///     {apiRoot}/dev_app/v1/app_list
 /// ```
 /// The value of the attribute of the type String shall not exceed the length of 32 characters.
@@ -209,6 +217,16 @@ pub struct ApplicationListInfo {
 }
 
 impl ApplicationListInfo {
+    pub fn empty() -> Self {
+        Self {
+            appName: None,
+            appProvider: None,
+            appSoftVersion: None,
+            serviceCont: None,
+            vendorId: None,
+        }
+    }
+
     fn to_hash_set(v: &Option<String>) -> HashSet<String> {
         let mut h = HashSet::new();
         if let Some(x) = v {
@@ -241,8 +259,48 @@ impl ApplicationListInfo {
 }
 
 impl ApplicationList {
+    /// Return an empty list of applications.
     pub fn empty() -> Self {
         Self { appList: vec![] }
+    }
+
+    /// Return the AppList matching a given ApplicationListInfo.
+    pub fn matching_info(&self, info: &ApplicationListInfo) -> Vec<AppList> {
+        let mut ret: Vec<AppList> = vec![];
+
+        // Retrieve all the sets of matching criteria.
+        let app_names = info.app_names();
+        let app_providers = info.app_providers();
+        let app_soft_versions = info.app_soft_versions();
+        let vendor_ids = info.vendor_ids();
+
+        // Perform filtering.
+        self.appList.iter().for_each(|x| {
+            let empty = VendorSpecificExt::empty();
+            if (app_names.is_empty() || app_names.contains(&x.appInfo.appName))
+                && (app_providers.is_empty() || app_providers.contains(&x.appInfo.appProvider))
+                && (app_soft_versions.is_empty()
+                    || app_soft_versions.contains(&x.appInfo.appSoftVersion))
+                && match info.serviceCont {
+                    Some(y) => match &x.appInfo.appCharcs {
+                        Some(app_charcs) => info.serviceCont == app_charcs.serviceCont,
+                        None => false,
+                    },
+                    None => true,
+                }
+                && (vendor_ids.is_empty()
+                    || vendor_ids.contains(
+                        &x.vendorSpecificExt
+                            .as_ref()
+                            .unwrap_or_else(|| &empty)
+                            .vendorId,
+                    ))
+            {
+                ret.push(x.clone());
+            }
+        });
+
+        ret
     }
 }
 
@@ -724,13 +782,7 @@ mod tests {
 
     #[test]
     fn test_application_list_info() {
-        let info = ApplicationListInfo {
-            appName: None,
-            appProvider: None,
-            appSoftVersion: None,
-            serviceCont: None,
-            vendorId: None,
-        };
+        let info = ApplicationListInfo::empty();
         assert_eq!(Ok(()), info.validate());
         println!("{}", info);
 
