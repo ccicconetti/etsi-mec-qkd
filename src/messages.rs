@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -13,7 +14,9 @@ use std::path::Path;
 
 /// Validate a message (or element thereof).
 pub trait Validate {
-    fn validate(&self) -> Result<(), String>;
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// Return error if the vector of problems passed is not empty.
@@ -34,6 +37,16 @@ where
         Ok(()) => (),
         Err(err) => problems.push(err),
     }
+}
+
+/// ProblemDetails data type, as specified in IETF RFC 7807 and specialized
+/// in ETSI GS MEC 009 V2.2.1 (2020-10) Table 6.15.3-1.
+#[derive(Serialize, Deserialize, Clone)]
+struct ProblemDetails {
+    /// The HTTP status code for this occurrence of the problem.
+    status: usize,
+    /// A human-readable explanation specific to this occurrence of the problem.
+    detail: String,
 }
 
 /// Polygon as defined in RFC 7946.
@@ -172,11 +185,66 @@ pub struct ApplicationList {
     pub appList: Vec<AppList>,
 }
 
+/// URI query parameters supported by the GET method on:
+///     {apiRoot}/dev_app/v1/app_list
+/// The value of the attribute of the type String shall not exceed the length of 32 characters.
+/// All the String values may contain multiple comma-separated values.
+#[derive(Deserialize)]
+pub struct ApplicationListInfo {
+    /// Name to identify the MEC application.
+    appName: Option<String>,
+    /// Provider of the MEC application.
+    appProvider: Option<String>,
+    /// Software version of the MEC application.
+    appSoftVersion: Option<String>,
+    /// Required service continuity mode for this application.
+    /// Permitted values:
+    /// 0 = SERVICE_CONTINUITY_NOT_REQUIRED.
+    /// 1 = SERVICE_CONTINUITY_REQUIRED.
+    serviceCont: Option<u32>,
+    /// Vendor identifier.
+    vendorId: Option<String>,
+}
+
+impl ApplicationListInfo {
+    fn to_hash_set(v: &Option<String>) -> HashSet<String> {
+        let mut h = HashSet::new();
+        if let Some(x) = v {
+            x.split(",").for_each(|s| {
+                h.insert(s.to_string());
+            });
+        }
+        h
+    }
+
+    /// Return the appName elements, if any.
+    pub fn app_names(&self) -> HashSet<String> {
+        Self::to_hash_set(&self.appName)
+    }
+
+    /// Return the appProvider elements, if any.
+    pub fn app_providers(&self) -> HashSet<String> {
+        Self::to_hash_set(&self.appProvider)
+    }
+
+    /// Return the appSoftVersion elements, if any.
+    pub fn app_soft_versions(&self) -> HashSet<String> {
+        Self::to_hash_set(&self.appSoftVersion)
+    }
+
+    /// Return the vendorId elements, if any.
+    pub fn vendor_ids(&self) -> HashSet<String> {
+        Self::to_hash_set(&self.vendorId)
+    }
+}
+
 impl ApplicationList {
     pub fn empty() -> Self {
         Self { appList: vec![] }
     }
 }
+
+impl Validate for ProblemDetails {}
 
 impl Validate for Polygon {
     fn validate(&self) -> Result<(), String> {
@@ -302,6 +370,61 @@ impl Validate for ApplicationList {
     }
 }
 
+fn service_cont_valid(s: Option<u32>) -> bool {
+    match s {
+        Some(x) => match x {
+            0 | 1 => true,
+            _ => false,
+        },
+        None => true,
+    }
+}
+
+fn value_or_not_specified(s: &Option<String>) -> &str {
+    match s {
+        Some(x) => x.as_str(),
+        None => "not specified",
+    }
+}
+
+impl Validate for ApplicationListInfo {
+    fn validate(&self) -> Result<(), String> {
+        let mut valid = true;
+        self.app_names().iter().for_each(|x| valid &= x.len() <= 32);
+        self.app_providers()
+            .iter()
+            .for_each(|x| valid &= x.len() <= 32);
+        self.app_soft_versions()
+            .iter()
+            .for_each(|x| valid &= x.len() <= 32);
+        valid &= service_cont_valid(self.serviceCont);
+        self.vendor_ids()
+            .iter()
+            .for_each(|x| valid &= x.len() <= 32);
+        match valid {
+            true => Ok(()),
+            false => Err("invalid query".to_string()),
+        }
+    }
+}
+
+fn service_cont_to_string(s: Option<u32>) -> String {
+    match s {
+        Some(x) => match x {
+            0 => "not required".to_string(),
+            1 => "required".to_string(),
+            _other => "invalid value".to_string(),
+        },
+        None => "not specified".to_string(),
+    }
+}
+
+impl Display for ProblemDetails {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({})", &self.status, &self.detail)
+    }
+}
+
 impl Display for Polygon {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut areas: Vec<String> = vec![];
@@ -356,14 +479,7 @@ impl Display for AppCharcs {
             &self.storage.unwrap_or(0),
             &self.latency.unwrap_or(0),
             &self.bandwidth.unwrap_or(0),
-            match &self.serviceCont {
-                Some(x) => match x {
-                    0 => "not required",
-                    1 => "required",
-                    _other => "invalid value",
-                },
-                None => "not specified",
-            }
+            service_cont_to_string(self.serviceCont)
         )
     }
 }
@@ -420,6 +536,20 @@ impl Display for ApplicationList {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let apps: Vec<String> = self.appList.iter().map(|x| x.to_string()).collect();
         write!(f, "{}", apps.join("\n"))
+    }
+}
+
+impl Display for ApplicationListInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "appName: {}, appProvider: {}, appSoftVersion: {}, serviceCont: {}, vendorId: {}",
+            value_or_not_specified(&self.appName),
+            value_or_not_specified(&self.appProvider),
+            value_or_not_specified(&self.appSoftVersion),
+            service_cont_to_string(self.serviceCont),
+            value_or_not_specified(&self.vendorId)
+        )
     }
 }
 
@@ -588,6 +718,44 @@ mod tests {
         };
         assert_eq!(Ok(()), a.validate());
         println!("{}", a);
+    }
+
+    #[test]
+    fn test_application_list_info() {
+        let info = ApplicationListInfo {
+            appName: None,
+            appProvider: None,
+            appSoftVersion: None,
+            serviceCont: None,
+            vendorId: None,
+        };
+        assert_eq!(Ok(()), info.validate());
+        println!("{}", info);
+
+        let mut info = ApplicationListInfo {
+            appName: Some("app1,app2".to_string()),
+            appProvider: Some("provider".to_string()),
+            appSoftVersion: Some("1.0,2.0".to_string()),
+            serviceCont: Some(1),
+            vendorId: None,
+        };
+        assert_eq!(Ok(()), info.validate());
+        println!("{}", info);
+
+        let mut long = "".to_string();
+        (0..33).for_each(|_| long.push('a'));
+        info.vendorId = Some(long);
+        assert!(info.validate().is_err());
+    }
+
+    #[test]
+    fn test_message_problem_details() {
+        let p = ProblemDetails {
+            status: 401,
+            detail: "not authorized".to_owned(),
+        };
+        assert_eq!(Ok(()), p.validate());
+        println!("{}", p);
     }
 
     #[test]

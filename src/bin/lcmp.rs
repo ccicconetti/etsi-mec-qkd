@@ -1,8 +1,9 @@
 use actix_web::http::header::ContentType;
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder, Result};
+use actix_web::{get, guard, web, App, HttpResponse, HttpServer, Responder, Result};
 use clap::Parser;
+use etsi_mec_qkd::messages::ApplicationListInfo;
 use etsi_mec_qkd::stateserver::{build_application_list_server, ApplicationListServer};
-use serde::Serialize;
+use serde::Deserialize;
 use std::sync::Mutex;
 
 /// A ETSI MEC Life Cycle Management Proxy
@@ -26,8 +27,11 @@ struct AppState {
     app_list_server: Mutex<Box<dyn ApplicationListServer + Send + Sync>>,
 }
 
-#[get("/dev_app/v1/app_list")]
-async fn app_list(data: web::Data<AppState>) -> impl Responder {
+async fn app_list(
+    info: web::Query<ApplicationListInfo>,
+    data: web::Data<AppState>,
+) -> HttpResponse {
+    println!("{}", info);
     match data.app_list_server.lock().unwrap().application_list() {
         Ok(x) => HttpResponse::Ok()
             .insert_header(ContentType::json())
@@ -51,9 +55,15 @@ async fn main() -> std::io::Result<()> {
         "starting HTTP server with {} workers at {}",
         args.workers, args.address
     );
-    HttpServer::new(move || App::new().app_data(state.clone()).service(app_list))
-        .bind(args.address)?
-        .workers(args.workers)
-        .run()
-        .await
+    HttpServer::new(move || {
+        App::new().app_data(state.clone()).service(
+            web::resource("/dev_app/v1/app_list")
+                .guard(guard::Header("content-type", "application/json"))
+                .route(web::get().to(app_list)),
+        )
+    })
+    .bind(args.address)?
+    .workers(args.workers)
+    .run()
+    .await
 }
