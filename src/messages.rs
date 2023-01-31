@@ -42,11 +42,11 @@ where
 /// ProblemDetails data type, as specified in IETF RFC 7807 and specialized
 /// in ETSI GS MEC 009 V2.2.1 (2020-10) Table 6.15.3-1.
 #[derive(Serialize, Deserialize, Clone)]
-struct ProblemDetails {
+pub struct ProblemDetails {
     /// The HTTP status code for this occurrence of the problem.
-    status: usize,
+    pub status: usize,
     /// A human-readable explanation specific to this occurrence of the problem.
-    detail: String,
+    pub detail: String,
 }
 
 /// Polygon as defined in RFC 7946.
@@ -186,7 +186,9 @@ pub struct ApplicationList {
 }
 
 /// URI query parameters supported by the GET method on:
+/// ```
 ///     {apiRoot}/dev_app/v1/app_list
+/// ```
 /// The value of the attribute of the type String shall not exceed the length of 32 characters.
 /// All the String values may contain multiple comma-separated values.
 #[derive(Deserialize)]

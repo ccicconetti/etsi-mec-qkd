@@ -1,7 +1,7 @@
 use actix_web::http::header::ContentType;
 use actix_web::{get, guard, web, App, HttpResponse, HttpServer, Responder, Result};
 use clap::Parser;
-use etsi_mec_qkd::messages::ApplicationListInfo;
+use etsi_mec_qkd::messages::{ApplicationListInfo, ProblemDetails, Validate};
 use etsi_mec_qkd::stateserver::{build_application_list_server, ApplicationListServer};
 use serde::Deserialize;
 use std::sync::Mutex;
@@ -31,6 +31,15 @@ async fn app_list(
     info: web::Query<ApplicationListInfo>,
     data: web::Data<AppState>,
 ) -> HttpResponse {
+    if let Err(err) = info.validate() {
+        let p = ProblemDetails {
+            status: 400,
+            detail: err,
+        };
+        return HttpResponse::BadRequest()
+            .insert_header(ContentType::json())
+            .body(serde_json::to_string(&p).unwrap_or_default());
+    }
     println!("{}", info);
     match data.app_list_server.lock().unwrap().application_list() {
         Ok(x) => HttpResponse::Ok()
