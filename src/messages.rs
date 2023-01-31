@@ -282,7 +282,7 @@ impl ApplicationList {
                 && (app_soft_versions.is_empty()
                     || app_soft_versions.contains(&x.appInfo.appSoftVersion))
                 && match info.serviceCont {
-                    Some(y) => match &x.appInfo.appCharcs {
+                    Some(_) => match &x.appInfo.appCharcs {
                         Some(app_charcs) => info.serviceCont == app_charcs.serviceCont,
                         None => false,
                     },
