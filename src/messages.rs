@@ -160,6 +160,53 @@ pub struct AppInfoList {
     appCharcs: Option<AppCharcs>,
 }
 
+/// User application instance information within AppInfoContext.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UserAppInstanceInfo {
+    /// Identifier of the user application instance.
+    /// It shall only be included in the response.
+    appInstanceId: Option<String>,
+    /// Address of the user application instance.
+    /// It shall only be included in the response.
+    referenceURI: Option<String>,
+    /// Location of the user application instance.
+    /// For a user application not provided by the requesting device application
+    /// it shall match one of the appLocations in ApplicationList.
+    appLocation: Option<LocationConstraints>,
+}
+
+/// appInfo field used in the AppContext message
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AppInfoContext {
+    /// Identifier of this MEC application descriptor.
+    /// It is equivalent to the appDId defined in clause 6.2.1.2 of ETSI GS MEC 010-2 [1].
+    /// It shall be present if the application is one in the ApplicationList.
+    appDId: Option<String>,
+    /// Name of the MEC application.
+    /// The length of the value shall not exceed 32 characters.
+    appName: String,
+    /// Provider of the MEC application.
+    /// The length of the value shall not exceed 32 characters.
+    appProvider: String,
+    /// Software version of the MEC application.
+    /// The length of the value shall not exceed 32 characters.
+    appSoftVersion: Option<String>,
+    /// Identifies the version of the application descriptor.
+    /// It is equivalent to the appDVersion defined in clause 6.2.1.2 of ETSI GS MEC 010-2
+    appDVersion: String,
+    /// Human readable description of the MEC application.
+    /// The length of the value shall not exceed 128 characters.
+    appDescription: Option<String>,
+    /// List of user application instance information.
+    userAppInstanceInfo: Vec<UserAppInstanceInfo>,
+    /// URI of the application package.
+    /// Included in the request if the application is not one in the ApplicationList.
+    /// appPackageSource enables on-boarding of the application package into the
+    /// MEC system. The application package shall comply with the definitions
+    /// in clause 6.2.1.2 of ETSI GS MEC 010-2 [1].
+    appPackageSource: Option<String>,
+}
+
 /// Extension for vendor specific information, used in the ApplicationsList message.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VendorSpecificExt {
@@ -398,6 +445,42 @@ impl Validate for AppInfoList {
     }
 }
 
+impl Validate for UserAppInstanceInfo {
+    fn validate(&self) -> Result<(), String> {
+        return match &self.appLocation {
+            Some(x) => x.validate(),
+            None => Ok(()),
+        };
+    }
+}
+
+impl Validate for AppInfoContext {
+    fn validate(&self) -> Result<(), String> {
+        let mut problems: Vec<String> = vec![];
+        if self.appName.len() > 32 {
+            problems.push("appName is too long".to_string());
+        }
+        if self.appProvider.len() > 32 {
+            problems.push("appProvider is too long".to_string());
+        }
+        if let Some(x) = &self.appSoftVersion {
+            if x.len() > 32 {
+                problems.push("appSoftVersion is too long".to_string());
+            }
+        }
+        if let Some(x) = &self.appDescription {
+            if x.len() > 128 {
+                problems.push("appDescription is too long".to_string());
+            }
+        }
+        for i in &self.userAppInstanceInfo {
+            add_problem(i, &mut problems);
+        }
+
+        check(problems)
+    }
+}
+
 impl Validate for VendorSpecificExt {
     fn validate(&self) -> Result<(), String> {
         if self.vendorId.len() > 32 {
@@ -557,6 +640,60 @@ impl Display for AppInfoList {
     }
 }
 
+impl Display for UserAppInstanceInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "appInstanceId: {}, referenceURI: {}, appLocation: {}",
+            match &self.appInstanceId {
+                Some(x) => x.to_string(),
+                None => "unspecified".to_string(),
+            },
+            match &self.referenceURI {
+                Some(x) => x.to_string(),
+                None => "unspecified".to_string(),
+            },
+            match &self.appLocation {
+                Some(x) => x.to_string(),
+                None => "unspecified".to_string(),
+            }
+        )
+    }
+}
+
+impl Display for AppInfoContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let user_app_instance_info: Vec<String> = self
+            .userAppInstanceInfo
+            .iter()
+            .map(|x| x.to_string())
+            .collect();
+        write!(
+            f,
+            "appDId: {}, appName: {}, appProvider: {}, appSoftVersion: {}, appDVersion: {}, appDescription: {}, userAppInstanceInfo: {}, appPackageSource: {}",
+            match &self.appDId {
+                Some(x) => x.to_string(),
+                None => "unspecified".to_string(),
+            },
+            self.appName,
+            self.appProvider,
+            match &self.appSoftVersion {
+                Some(x) => x.to_string(),
+                None => "unspecified".to_string(),
+            },
+            self.appDVersion,
+            match &self.appDescription {
+                Some(x) => x.to_string(),
+                None => "unspecified".to_string(),
+            },
+            user_app_instance_info.join(","), match &self.appPackageSource {
+                    Some(x) => x.to_string(),
+                    None => "unspecified".to_string(),
+            }
+        )
+    }
+}
+
 impl AppInfoList {
     fn empty() -> Self {
         Self {
@@ -568,6 +705,21 @@ impl AppInfoList {
             appDescription: "".to_owned(),
             appLocation: vec![],
             appCharcs: None,
+        }
+    }
+}
+
+impl AppInfoContext {
+    fn empty() -> Self {
+        Self {
+            appDId: None,
+            appName: "".to_owned(),
+            appProvider: "".to_owned(),
+            appSoftVersion: None,
+            appDVersion: "".to_owned(),
+            appDescription: None,
+            userAppInstanceInfo: vec![],
+            appPackageSource: None,
         }
     }
 }
@@ -643,7 +795,7 @@ mod tests {
         }
     }
 
-    fn default_app_info() -> AppInfoList {
+    fn default_app_info_list() -> AppInfoList {
         AppInfoList {
             appDId: "test_appDId".to_owned(),
             appName: "test_appName".to_owned(),
@@ -657,6 +809,27 @@ mod tests {
                 area: Some(default_polygon()),
             }],
             appCharcs: Some(default_app_charcs()),
+        }
+    }
+
+    fn default_app_info_context() -> AppInfoContext {
+        AppInfoContext {
+            appDId: Some("test_appDId".to_owned()),
+            appName: "test_appName".to_owned(),
+            appProvider: "test_appProvider".to_owned(),
+            appSoftVersion: Some("test_appSoftVersion".to_owned()),
+            appDVersion: "test_appDVersion".to_owned(),
+            appDescription: Some("test_appDescription".to_owned()),
+            userAppInstanceInfo: vec![UserAppInstanceInfo {
+                appInstanceId: Some("test_appInstanceId".to_owned()),
+                referenceURI: Some("test_referenceURI".to_owned()),
+                appLocation: Some(LocationConstraints {
+                    countryCode: None,
+                    civicAddressElement: vec![],
+                    area: Some(default_polygon()),
+                }),
+            }],
+            appPackageSource: Some("test_appPackageSource".to_owned()),
         }
     }
 
@@ -731,12 +904,28 @@ mod tests {
     }
 
     #[test]
-    fn test_message_app_info() {
+    fn test_message_app_info_list() {
         let a = AppInfoList::empty();
         assert_eq!(Ok(()), a.validate());
         println!("{}", a);
 
-        let mut a = default_app_info();
+        let mut a = default_app_info_list();
+        assert_eq!(Ok(()), a.validate());
+        println!("{}", a);
+
+        let mut long = "".to_string();
+        (0..33).for_each(|_| long.push('a'));
+        a.appName = long;
+        assert!(a.validate().is_err());
+    }
+
+    #[test]
+    fn test_message_app_info_context() {
+        let a = AppInfoContext::empty();
+        assert_eq!(Ok(()), a.validate());
+        println!("{}", a);
+
+        let mut a = default_app_info_context();
         assert_eq!(Ok(()), a.validate());
         println!("{}", a);
 
@@ -765,7 +954,7 @@ mod tests {
         let a = ApplicationList {
             appList: vec![
                 AppList {
-                    appInfo: default_app_info(),
+                    appInfo: default_app_info_list(),
                     vendorSpecificExt: None,
                 },
                 AppList {
@@ -817,7 +1006,7 @@ mod tests {
     fn test_message_application_list_to_json() {
         let a = ApplicationList {
             appList: vec![AppList {
-                appInfo: default_app_info(),
+                appInfo: default_app_info_list(),
                 vendorSpecificExt: None,
             }],
         };
