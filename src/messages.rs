@@ -134,7 +134,7 @@ pub struct AppCharcs {
 
 /// appInfo field used in the ApplicationList message
 #[derive(Serialize, Deserialize, Clone)]
-pub struct AppInfo {
+pub struct AppInfoList {
     /// Identifier of this MEC application descriptor.
     /// It is equivalent to the appDId defined in clause 6.2.1.2 of ETSI GS MEC 010-2 [1].
     /// This attribute shall be globally unique.
@@ -181,7 +181,7 @@ impl VendorSpecificExt {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AppList {
     /// Application information.
-    appInfo: AppInfo,
+    appInfo: AppInfoList,
     /// Extension for vendor specific information.
     vendorSpecificExt: Option<VendorSpecificExt>,
 }
@@ -371,7 +371,7 @@ impl Validate for AppCharcs {
     }
 }
 
-impl Validate for AppInfo {
+impl Validate for AppInfoList {
     fn validate(&self) -> Result<(), String> {
         let mut problems: Vec<String> = vec![];
         if self.appName.len() > 32 {
@@ -544,7 +544,7 @@ impl Display for AppCharcs {
     }
 }
 
-impl Display for AppInfo {
+impl Display for AppInfoList {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let location_constraints: Vec<String> =
             self.appLocation.iter().map(|x| x.to_string()).collect();
@@ -557,7 +557,7 @@ impl Display for AppInfo {
     }
 }
 
-impl AppInfo {
+impl AppInfoList {
     fn empty() -> Self {
         Self {
             appDId: "".to_owned(),
@@ -643,8 +643,8 @@ mod tests {
         }
     }
 
-    fn default_app_info() -> AppInfo {
-        AppInfo {
+    fn default_app_info() -> AppInfoList {
+        AppInfoList {
             appDId: "test_appDId".to_owned(),
             appName: "test_appName".to_owned(),
             appProvider: "test_appProvider".to_owned(),
@@ -732,7 +732,7 @@ mod tests {
 
     #[test]
     fn test_message_app_info() {
-        let a = AppInfo::empty();
+        let a = AppInfoList::empty();
         assert_eq!(Ok(()), a.validate());
         println!("{}", a);
 
@@ -769,7 +769,7 @@ mod tests {
                     vendorSpecificExt: None,
                 },
                 AppList {
-                    appInfo: AppInfo::empty(),
+                    appInfo: AppInfoList::empty(),
                     vendorSpecificExt: Some(VendorSpecificExt {
                         vendorId: "vendor-specific".to_string(),
                     }),
