@@ -263,6 +263,33 @@ pub struct ApplicationListInfo {
     vendorId: Option<String>,
 }
 
+/// AppContext message
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AppContext {
+    /// Uniquely identifies the application context in the MEC system.
+    /// Assigned by the MEC system and shall be present other than in a create request.
+    /// The length of the value shall not exceed 32 characters.
+    contextId: Option<String>,
+    /// Uniquely identifies the device application.
+    /// The length of the value shall not exceed 32 characters.
+    associateDevAppId: String,
+    /// URI assigned by the device application to receive application lifecycle
+    /// related notifications. Inclusion in the request implies the client
+    /// supports the pub/sub mechanism and is capable of receiving notifications.
+    /// This endpoint shall be maintained for the lifetime of the application context.
+    callbackReference: Option<String>,
+    /// Used by the device application to request to receive notifications at
+    /// the callbackReference URI relating to location availability for user
+    /// application instantiation.
+    appLocationUpdates: Option<bool>,
+    /// Provides indication to the MEC system that instantiation of the requested
+    /// application is desired should a requested appLocation become available
+    /// that was not at the time of the request.
+    appAutoInstantiation: Option<bool>,
+    // application information
+    appInfo: AppInfoContext,
+}
+
 impl ApplicationListInfo {
     pub fn empty() -> Self {
         Self {
@@ -509,6 +536,22 @@ impl Validate for ApplicationList {
         for a in &self.appList {
             add_problem(a, &mut problems);
         }
+        check(problems)
+    }
+}
+
+impl Validate for AppContext {
+    fn validate(&self) -> Result<(), String> {
+        let mut problems: Vec<String> = vec![];
+        if let Some(x) = &self.contextId {
+            if x.len() > 32 {
+                problems.push("contextId is too long".to_string());
+            }
+        }
+        if self.associateDevAppId.len() > 32 {
+            problems.push("associateDevAppId is too long".to_string());
+        }
+        add_problem(&self.appInfo, &mut problems);
         check(problems)
     }
 }
@@ -765,6 +808,29 @@ impl Display for ApplicationListInfo {
     }
 }
 
+impl Display for AppContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(x) = &self.contextId {
+            write!(f, "contextId {}, ", x.to_string())?;
+        }
+        write!(f, "associatedDevAppId {}, ", self.associateDevAppId)?;
+        if let Some(x) = &self.callbackReference {
+            write!(f, "callbackReference {}, ", x)?;
+        }
+        if let Some(x) = self.appLocationUpdates {
+            if x {
+                write!(f, "appLocationUpdates enabled, ")?;
+            }
+        }
+        if let Some(x) = self.appAutoInstantiation {
+            if x {
+                write!(f, "appAutoInstantiation enabled, ")?;
+            }
+        }
+        write!(f, "appInfo {}", self.appInfo)
+    }
+}
+
 pub fn application_list_from_file(file: &mut File) -> std::io::Result<ApplicationList> {
     let mut content = String::new();
     file.read_to_string(&mut content)?;
@@ -989,6 +1055,32 @@ mod tests {
         (0..33).for_each(|_| long.push('a'));
         info.vendorId = Some(long);
         assert!(info.validate().is_err());
+    }
+
+    #[test]
+    fn test_app_context() {
+        let mut context = AppContext {
+            contextId: None,
+            associateDevAppId: "1234".to_owned(),
+            callbackReference: None,
+            appLocationUpdates: None,
+            appAutoInstantiation: None,
+            appInfo: default_app_info_context(),
+        };
+        assert_eq!(Ok(()), context.validate());
+        println!("{}", context);
+
+        context.contextId = Some("test_contextId".to_owned());
+        context.callbackReference = Some("test_callbackReference".to_owned());
+        context.appLocationUpdates = Some(true);
+        context.appAutoInstantiation = Some(true);
+        assert_eq!(Ok(()), context.validate());
+        println!("{}", context);
+
+        let mut long = "".to_string();
+        (0..33).for_each(|_| long.push('a'));
+        context.contextId = Some(long);
+        assert!(context.validate().is_err());
     }
 
     #[test]
