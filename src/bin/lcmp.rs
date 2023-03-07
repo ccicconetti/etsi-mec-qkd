@@ -1,8 +1,9 @@
 use actix_web::http::header::ContentType;
 use actix_web::{guard, middleware::Logger, web, App, HttpResponse, HttpServer};
 use clap::Parser;
+use etsi_mec_qkd::applicationlistserver::{build_application_list_server, ApplicationListServer};
+use etsi_mec_qkd::lcmpserver::LcmpServer;
 use etsi_mec_qkd::messages::{ApplicationListInfo, ProblemDetails, Validate};
-use etsi_mec_qkd::stateserver::{build_application_list_server, ApplicationListServer};
 use log::info;
 use std::sync::Mutex;
 
@@ -24,7 +25,8 @@ struct Args {
 }
 
 struct AppState {
-    app_list_server: Mutex<Box<dyn ApplicationListServer + Send + Sync>>,
+    // app_list_server: Mutex<Box<dyn ApplicationListServer + Send + Sync>>,
+    lcmp_server: Mutex<Box<LcmpServer>>,
 }
 
 async fn app_list(
@@ -40,10 +42,12 @@ async fn app_list(
             .insert_header(ContentType::json())
             .body(serde_json::to_string(&p).unwrap_or_default());
     }
+
     match data
-        .app_list_server
+        .lcmp_server
         .lock()
         .unwrap()
+        .application_list()
         .application_list(info.0)
     {
         Ok(x) => HttpResponse::Ok()
@@ -58,9 +62,8 @@ async fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
     let state = web::Data::new(AppState {
-        app_list_server: Mutex::new(
-            build_application_list_server(&args.app_list_type)
-                .expect("could not create the ApplicationList server"),
+        lcmp_server: Mutex::new(
+            LcmpServer::build(&args.app_list_type).expect("could not create the LCMP server"),
         ),
     });
 

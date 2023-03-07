@@ -1,4 +1,4 @@
-//! Server that keeps the internal state of the system components.
+//! Directory of ETSI MEC applications.
 
 use crate::messages::{application_list_from_file, ApplicationList, ApplicationListInfo};
 use std::fs::File;
@@ -83,6 +83,8 @@ pub fn build_application_list_server(
                 }
             }
         }
+    } else if value == "empty" {
+        return Ok(Box::new(StaticApplicationListServer::empty()));
     }
     Err("could not create the ApplicationListServer".to_string())
 }
