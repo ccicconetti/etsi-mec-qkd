@@ -25,8 +25,7 @@ struct Args {
 }
 
 struct AppState {
-    // app_list_server: Mutex<Box<dyn ApplicationListServer + Send + Sync>>,
-    lcmp_server: Mutex<Box<LcmpServer>>,
+    lcmp_server: Mutex<LcmpServer>,
 }
 
 async fn app_list(

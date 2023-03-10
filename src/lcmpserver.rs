@@ -12,10 +12,10 @@ impl LcmpServer {
         self.application_list_server.as_ref()
     }
 
-    pub fn build(als_value: &str) -> Result<Box<LcmpServer>, String> {
-        Ok(Box::new(Self {
+    pub fn build(als_value: &str) -> Result<LcmpServer, String> {
+        Ok(Self {
             application_list_server: build_application_list_server(als_value)?,
-        }))
+        })
     }
 }
 
