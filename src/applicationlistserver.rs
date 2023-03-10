@@ -4,9 +4,11 @@ use crate::messages::{application_list_from_file, ApplicationList, ApplicationLi
 use std::fs::File;
 use std::io::Write;
 
-/// Return the current ApplicationList to be returned the device apps.
+/// Interface of an ApplicationListServer
 pub trait ApplicationListServer {
+    /// Return the ApplicationList filtered through the given ApplicationListInfo
     fn application_list(&self, info: ApplicationListInfo) -> Result<ApplicationList, String>;
+    /// Return the status of the server
     fn status(&self) -> Result<(), String>;
 }
 

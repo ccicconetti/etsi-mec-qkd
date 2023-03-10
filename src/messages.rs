@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use uuid::Uuid;
 
 /// Validate a message (or element thereof).
 pub trait Validate {
@@ -165,14 +166,24 @@ pub struct AppInfoList {
 pub struct UserAppInstanceInfo {
     /// Identifier of the user application instance.
     /// It shall only be included in the response.
-    appInstanceId: Option<String>,
+    pub appInstanceId: Option<String>,
     /// Address of the user application instance.
     /// It shall only be included in the response.
-    referenceURI: Option<String>,
+    pub referenceURI: Option<String>,
     /// Location of the user application instance.
     /// For a user application not provided by the requesting device application
     /// it shall match one of the appLocations in ApplicationList.
-    appLocation: Option<LocationConstraints>,
+    pub appLocation: Option<LocationConstraints>,
+}
+
+impl UserAppInstanceInfo {
+    pub fn from_reference_uri(reference_uri: &str) -> Self {
+        Self {
+            appInstanceId: Some(Uuid::simple(Uuid::new_v4()).to_string()),
+            referenceURI: Some(reference_uri.to_string()),
+            appLocation: None,
+        }
+    }
 }
 
 /// appInfo field used in the AppContext message
@@ -198,7 +209,7 @@ pub struct AppInfoContext {
     /// The length of the value shall not exceed 128 characters.
     appDescription: Option<String>,
     /// List of user application instance information.
-    userAppInstanceInfo: Vec<UserAppInstanceInfo>,
+    pub userAppInstanceInfo: Vec<UserAppInstanceInfo>,
     /// URI of the application package.
     /// Included in the request if the application is not one in the ApplicationList.
     /// appPackageSource enables on-boarding of the application package into the
@@ -269,7 +280,7 @@ pub struct AppContext {
     /// Uniquely identifies the application context in the MEC system.
     /// Assigned by the MEC system and shall be present other than in a create request.
     /// The length of the value shall not exceed 32 characters.
-    contextId: Option<String>,
+    pub contextId: Option<String>,
     /// Uniquely identifies the device application.
     /// The length of the value shall not exceed 32 characters.
     associateDevAppId: String,
@@ -277,7 +288,7 @@ pub struct AppContext {
     /// related notifications. Inclusion in the request implies the client
     /// supports the pub/sub mechanism and is capable of receiving notifications.
     /// This endpoint shall be maintained for the lifetime of the application context.
-    callbackReference: Option<String>,
+    pub callbackReference: Option<String>,
     /// Used by the device application to request to receive notifications at
     /// the callbackReference URI relating to location availability for user
     /// application instantiation.
@@ -287,7 +298,44 @@ pub struct AppContext {
     /// that was not at the time of the request.
     appAutoInstantiation: Option<bool>,
     // application information
-    appInfo: AppInfoContext,
+    pub appInfo: AppInfoContext,
+}
+
+impl AppContext {
+    pub fn valid_request(&self) -> Result<(), String> {
+        if let Err(x) = self.validate() {
+            return Err(x);
+        }
+        if self.contextId.is_some() {
+            return Err("contextId cannot be present in a request AppContext".to_string());
+        }
+        if !self.appInfo.userAppInstanceInfo.is_empty() {
+            return Err(
+                "userAppInstanceInfo cannot be present in a request AppContext".to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    pub fn request_from_name_provider(name: &str, provider: &str) -> Self {
+        Self {
+            contextId: None,
+            associateDevAppId: Uuid::simple(Uuid::new_v4()).to_string(),
+            callbackReference: None,
+            appLocationUpdates: None,
+            appAutoInstantiation: None,
+            appInfo: AppInfoContext {
+                appDId: None,
+                appName: name.to_string(),
+                appProvider: provider.to_string(),
+                appSoftVersion: None,
+                appDVersion: "".to_owned(),
+                appDescription: None,
+                userAppInstanceInfo: vec![],
+                appPackageSource: None,
+            },
+        }
+    }
 }
 
 impl ApplicationListInfo {
@@ -1081,6 +1129,12 @@ mod tests {
         (0..33).for_each(|_| long.push('a'));
         context.contextId = Some(long);
         assert!(context.validate().is_err());
+
+        assert!(
+            AppContext::request_from_name_provider("my_app_name", "my_app_provider")
+                .validate()
+                .is_ok()
+        );
     }
 
     #[test]
