@@ -1190,7 +1190,16 @@ mod tests {
             callbackReference: None,
             appLocationUpdates: None,
             appAutoInstantiation: None,
-            appInfo: default_app_info_context(),
+            appInfo: AppInfoContext {
+                appDId: None,
+                appName: "test_appName".to_owned(),
+                appProvider: "test_appProvider".to_owned(),
+                appSoftVersion: None,
+                appDVersion: "".to_owned(),
+                appDescription: None,
+                userAppInstanceInfo: vec![],
+                appPackageSource: None,
+            },
         };
         assert_eq!(Ok(()), context.validate());
 
