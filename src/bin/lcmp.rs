@@ -1,5 +1,8 @@
 use actix_web::http::header::ContentType;
-use actix_web::{guard, middleware::Logger, web, App, HttpResponse, HttpServer};
+use actix_web::http::StatusCode;
+use actix_web::{
+    guard, middleware::Logger, web, App, HttpResponse, HttpResponseBuilder, HttpServer,
+};
 use clap::Parser;
 use etsi_mec_qkd::applicationlistserver::{build_application_list_server, ApplicationListServer};
 use etsi_mec_qkd::lcmpserver::LcmpServer;
@@ -8,18 +11,25 @@ use log::info;
 use serde::__private::de::Content;
 use std::sync::Mutex;
 
-/// Return a 400 Bad Request with Problem Details filled with passed argument.
-fn bad_request(error: &str) -> HttpResponse {
+/// Return an HTTP response with a Problem Details body
+fn problem_details_response(status_code: StatusCode, error: &str) -> HttpResponse {
     let p = ProblemDetails {
-        status: 400,
+        status: status_code.as_u16().into(),
         detail: error.to_string(),
     };
-    HttpResponse::BadRequest()
+    HttpResponseBuilder::new(status_code)
         .insert_header(ContentType::json())
         .body(serde_json::to_string(&p).unwrap_or_default())
 }
 
-/// An ETSI MEC Life Cycle Management Proxy
+/// Return an HTTP OK response
+fn ok_response<T: serde::Serialize>(body: &T) -> HttpResponse {
+    HttpResponse::Ok()
+        .insert_header(ContentType::json())
+        .body(serde_json::to_string(&body).unwrap_or_default())
+}
+
+/// Command-line arguments
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -36,20 +46,22 @@ struct Args {
     app_list_type: String,
 
     /// Application context manager type
-    #[arg(long, default_value_t = String::from("static;file=app_context.json"))]
+    #[arg(long, default_value_t = String::from("single;10,URI"))]
     app_context_type: String,
 }
 
+/// An ETSI MEC Life Cycle Management Proxy
 struct AppState {
     lcmp_server: Mutex<LcmpServer>,
 }
 
+/// Handler for GET /app_list
 async fn app_list(
     info: web::Query<ApplicationListInfo>,
     data: web::Data<AppState>,
 ) -> HttpResponse {
     match info.validate() {
-        Err(err) => bad_request(err.as_str()),
+        Err(err) => problem_details_response(StatusCode::BAD_REQUEST, err.as_str()),
         Ok(_) => match data
             .lcmp_server
             .lock()
@@ -57,35 +69,30 @@ async fn app_list(
             .application_list()
             .application_list(info.0)
         {
-            Ok(x) => HttpResponse::Ok()
-                .insert_header(ContentType::json())
-                .body(serde_json::to_string(&x).unwrap_or_default()),
+            Ok(x) => ok_response(&x),
             Err(err) => HttpResponse::InternalServerError().body(format!("{}", err)),
         },
     }
 }
 
+/// Handler for POST /app_contexts
 async fn app_contexts(data: web::Data<AppState>, body: String) -> HttpResponse {
-    let x: Result<AppContext, serde_json::Error> = serde_json::from_str(&body);
-    match x {
+    let mut x: Result<AppContext, serde_json::Error> = serde_json::from_str(&body);
+    match &mut x {
         Ok(app_context) => {
-            HttpResponse::Ok().body(serde_json::to_string(&app_context).unwrap_or_default())
+            match data
+                .lcmp_server
+                .lock()
+                .unwrap()
+                .app_context()
+                .new_context(app_context)
+            {
+                Ok(_) => ok_response(&app_context),
+                Err(err) => problem_details_response(StatusCode::FORBIDDEN, err.as_str()),
+            }
         }
-        Err(err) => bad_request(err.to_string().as_str()),
+        Err(err) => problem_details_response(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     }
-
-    // match data
-    //     .lcmp_server
-    //     .lock()
-    //     .unwrap()
-    //     .application_list()
-    //     .application_list(info.0)
-    // {
-    //     Ok(x) => HttpResponse::Ok()
-    //         .insert_header(ContentType::json())
-    //         .body(serde_json::to_string(&x).unwrap_or_default()),
-    //     Err(err) => HttpResponse::InternalServerError().body(format!("{}", err)),
-    // }
 }
 
 #[actix_web::main]

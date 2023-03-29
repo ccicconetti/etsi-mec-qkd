@@ -14,8 +14,8 @@ impl LcmpServer {
         self.application_list_server.as_ref()
     }
 
-    pub fn app_context(&self) -> &dyn AppContextServer {
-        self.app_context_server.as_ref()
+    pub fn app_context(&mut self) -> &mut dyn AppContextServer {
+        self.app_context_server.as_mut()
     }
 
     pub fn build(als_value: &str, acs_value: &str) -> Result<LcmpServer, String> {
@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn test_empty_lcmp() -> Result<(), String> {
-        let lcmp = LcmpServer {
+        let mut lcmp = LcmpServer {
             application_list_server: build_application_list_server("empty")?,
             app_context_server: build_app_context_server("single;1,URI")?,
         };
