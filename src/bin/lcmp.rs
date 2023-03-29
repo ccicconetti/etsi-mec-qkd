@@ -34,6 +34,10 @@ struct Args {
     /// Application list manager type
     #[arg(long, default_value_t = String::from("static;file=application_list.json"))]
     app_list_type: String,
+
+    /// Application context manager type
+    #[arg(long, default_value_t = String::from("static;file=app_context.json"))]
+    app_context_type: String,
 }
 
 struct AppState {
@@ -90,7 +94,8 @@ async fn main() -> std::io::Result<()> {
 
     let state = web::Data::new(AppState {
         lcmp_server: Mutex::new(
-            LcmpServer::build(&args.app_list_type).expect("could not create the LCMP server"),
+            LcmpServer::build(&args.app_list_type, &args.app_context_type)
+                .expect("could not create the LCMP server"),
         ),
     });
 
