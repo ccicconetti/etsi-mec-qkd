@@ -1,6 +1,7 @@
 *.bkp
 *.dtmp
 application_list.json
+app_context.json
 
 # Added by cargo
 

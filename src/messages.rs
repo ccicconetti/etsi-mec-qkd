@@ -890,6 +890,20 @@ pub fn application_list_from_file(file: &mut File) -> std::io::Result<Applicatio
 mod tests {
     use super::*;
 
+    fn open_file(filename: &str) -> Result<File, String> {
+        match Path::new(filename).exists() {
+            true => Err(format!("will not overwrite: {}", filename)),
+            false => match File::create(filename) {
+                Ok(x) => Ok(x),
+                Err(err) => Err(format!(
+                    "could not open file '{}': {}",
+                    filename,
+                    err.to_string()
+                )),
+            },
+        }
+    }
+
     fn default_polygon() -> Polygon {
         Polygon {
             coordinates: vec![
@@ -1157,15 +1171,37 @@ mod tests {
             }],
         };
 
-        let filename = "application_list.json";
-        if Path::new(filename).exists() {
-            println!("will not overwrite: {}", filename);
-            return;
+        match open_file("application_list.json") {
+            Ok(mut f) => {
+                let j = serde_json::to_string(&a).expect("could not serialize");
+                f.write(j.as_bytes()).expect("could not write to file");
+                println!("written:\n{}", a);
+            }
+            Err(err) => println!("{}", err),
         }
-        let mut f = File::create(filename).expect("could not create file");
-        let j = serde_json::to_string(&a).expect("could not serialize");
-        f.write(j.as_bytes()).expect("could not write to file");
-        println!("written:\n{}", a);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_message_application_app_context() {
+        let context = AppContext {
+            contextId: None,
+            associateDevAppId: "1234".to_owned(),
+            callbackReference: None,
+            appLocationUpdates: None,
+            appAutoInstantiation: None,
+            appInfo: default_app_info_context(),
+        };
+        assert_eq!(Ok(()), context.validate());
+
+        match open_file("app_context.json") {
+            Ok(mut f) => {
+                let j = serde_json::to_string(&context).expect("could not serialize");
+                f.write(j.as_bytes()).expect("could not write to file");
+                println!("written:\n{}", context);
+            }
+            Err(err) => println!("{}", err),
+        }
     }
 
     #[test]
