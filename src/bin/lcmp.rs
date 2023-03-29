@@ -3,9 +3,21 @@ use actix_web::{guard, middleware::Logger, web, App, HttpResponse, HttpServer};
 use clap::Parser;
 use etsi_mec_qkd::applicationlistserver::{build_application_list_server, ApplicationListServer};
 use etsi_mec_qkd::lcmpserver::LcmpServer;
-use etsi_mec_qkd::messages::{ApplicationListInfo, ProblemDetails, Validate};
+use etsi_mec_qkd::messages::{AppContext, ApplicationListInfo, ProblemDetails, Validate};
 use log::info;
+use serde::__private::de::Content;
 use std::sync::Mutex;
+
+/// Return a 400 Bad Request with Problem Details filled with passed argument.
+fn bad_request(error: &str) -> HttpResponse {
+    let p = ProblemDetails {
+        status: 400,
+        detail: error.to_string(),
+    };
+    HttpResponse::BadRequest()
+        .insert_header(ContentType::json())
+        .body(serde_json::to_string(&p).unwrap_or_default())
+}
 
 /// An ETSI MEC Life Cycle Management Proxy
 #[derive(Parser, Debug)]
@@ -32,28 +44,44 @@ async fn app_list(
     info: web::Query<ApplicationListInfo>,
     data: web::Data<AppState>,
 ) -> HttpResponse {
-    if let Err(err) = info.validate() {
-        let p = ProblemDetails {
-            status: 400,
-            detail: err,
-        };
-        return HttpResponse::BadRequest()
-            .insert_header(ContentType::json())
-            .body(serde_json::to_string(&p).unwrap_or_default());
+    match info.validate() {
+        Err(err) => bad_request(err.as_str()),
+        Ok(_) => match data
+            .lcmp_server
+            .lock()
+            .unwrap()
+            .application_list()
+            .application_list(info.0)
+        {
+            Ok(x) => HttpResponse::Ok()
+                .insert_header(ContentType::json())
+                .body(serde_json::to_string(&x).unwrap_or_default()),
+            Err(err) => HttpResponse::InternalServerError().body(format!("{}", err)),
+        },
+    }
+}
+
+async fn app_contexts(data: web::Data<AppState>, body: String) -> HttpResponse {
+    let x: Result<AppContext, serde_json::Error> = serde_json::from_str(&body);
+    match x {
+        Ok(app_context) => {
+            HttpResponse::Ok().body(serde_json::to_string(&app_context).unwrap_or_default())
+        }
+        Err(err) => bad_request(err.to_string().as_str()),
     }
 
-    match data
-        .lcmp_server
-        .lock()
-        .unwrap()
-        .application_list()
-        .application_list(info.0)
-    {
-        Ok(x) => HttpResponse::Ok()
-            .insert_header(ContentType::json())
-            .body(serde_json::to_string(&x).unwrap_or_default()),
-        Err(err) => HttpResponse::InternalServerError().body(format!("{}", err)),
-    }
+    // match data
+    //     .lcmp_server
+    //     .lock()
+    //     .unwrap()
+    //     .application_list()
+    //     .application_list(info.0)
+    // {
+    //     Ok(x) => HttpResponse::Ok()
+    //         .insert_header(ContentType::json())
+    //         .body(serde_json::to_string(&x).unwrap_or_default()),
+    //     Err(err) => HttpResponse::InternalServerError().body(format!("{}", err)),
+    // }
 }
 
 #[actix_web::main]
@@ -80,6 +108,11 @@ async fn main() -> std::io::Result<()> {
                 web::resource("/dev_app/v1/app_list")
                     .guard(guard::Header("content-type", "application/json"))
                     .route(web::get().to(app_list)),
+            )
+            .service(
+                web::resource("/dev_app/v1/app_contexts")
+                    .guard(guard::Header("content-type", "application/json"))
+                    .route(web::post().to(app_contexts)),
             )
     })
     .bind(args.address)?
