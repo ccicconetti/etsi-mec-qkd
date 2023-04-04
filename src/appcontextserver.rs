@@ -11,6 +11,8 @@ pub trait AppContextServer {
     fn new_context(&mut self, app_context: &mut AppContext) -> Result<(), String>;
     /// Delete an active context.
     fn del_context(&mut self, context_id: &str) -> Result<(), String>;
+    /// Get an active context.
+    fn get_context(&mut self, context_id: &str) -> Result<&AppContext, String>;
     /// Update an active context.
     /// Only the callbackReference is allowed to be updated. If the other
     /// fields do not match exactly, then the command is denied.
@@ -81,7 +83,15 @@ impl AppContextServer for SingleAppContextServer {
     fn del_context(&mut self, context_id: &str) -> Result<(), String> {
         match self.app_contexts.remove(context_id) {
             Some(_) => Ok(()),
-            None => Err("context ID not found".to_string()),
+            None => Err(format!("context ID not found: {}", context_id)),
+        }
+    }
+
+    /// Get an active context.
+    fn get_context(&mut self, context_id: &str) -> Result<&AppContext, String> {
+        match self.app_contexts.get(context_id) {
+            Some(x) => Ok(x),
+            None => Err(format!("context ID not found: {}", context_id)),
         }
     }
 
@@ -92,13 +102,22 @@ impl AppContextServer for SingleAppContextServer {
         if let Some(context_id) = &app_context.contextId {
             match self.app_contexts.get_mut(context_id.as_str()) {
                 Some(x) => {
-                    x.contextId = app_context.contextId.clone();
-                    return Ok(());
+                    match x.identical_except_callback_reference(&app_context) {
+                        true => {
+                            x.callbackReference = app_context.callbackReference.clone();
+                            return Ok(());
+                        }
+                        false => {
+                            return Err(format!(
+                                "AppContext in the request does not match that in the server"
+                            ));
+                        }
+                    };
                 }
                 None => return Err(format!("context ID not found: {}", context_id)),
             }
         }
-        Err("unspecified context ID".to_string())
+        Err("context ID not specified in the request".to_string())
     }
 
     /// Always return good health.
@@ -182,19 +201,61 @@ mod tests {
         assert!(all_contexts.len() == 10);
         assert!(all_instances.len() == 10);
 
-        // the 11-th fails
+        // get the app contexts one by one
+        for elem in &all_contexts {
+            if let Some(context_id) = elem {
+                s.get_context(context_id.as_str())?;
+            }
+        }
+
+        // fail to get a non-existing app context
+        assert!(&s.get_context("not-a-valid-context-id").is_err());
+
+        // adding the 11-th fails
         assert!(&s.new_context(&mut a).is_err());
 
         // delete one entry
         let a_context_id = all_contexts.iter().next().unwrap().clone().unwrap();
         s.del_context(a_context_id.as_str())?;
 
+        // not getting that context fails, too
+        assert!(&s.get_context(a_context_id.as_str()).is_err());
+
         // now it is possible to add a new one
         s.new_context(&mut a)?;
 
         // update the entry
-        a.callbackReference = Some("new_callback_reference".to_string());
+        let new_callback_reference = "new_callback_reference";
+        a.callbackReference = Some(new_callback_reference.to_string());
         s.update_context(&mut a)?;
+        if let Some(context_id) = &a.contextId {
+            assert!(&s
+                .get_context(context_id.as_str())
+                .ok()
+                .unwrap()
+                .identical_except_callback_reference(&a));
+            if let Some(x) = &s
+                .get_context(context_id.as_str())
+                .ok()
+                .unwrap()
+                .callbackReference
+            {
+                assert_eq!(x, new_callback_reference,);
+            }
+        }
+
+        // try to update an entry with a non-matching AppContext
+        let mut b =
+            AppContext::request_from_name_provider("my_another_app_name", "my_app_provider");
+        b.contextId = a.contextId.clone();
+        if let Some(context_id) = &a.contextId {
+            assert!(!&s
+                .get_context(context_id.as_str())
+                .ok()
+                .unwrap()
+                .identical_except_callback_reference(&b));
+            assert!(&s.update_context(&mut b).is_err());
+        }
 
         // cannot add another context
         a.contextId = None;

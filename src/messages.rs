@@ -77,13 +77,13 @@ pub struct ProblemDetails {
 ///         ]
 ///     ]
 /// }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Polygon {
     coordinates: Vec<Vec<Vec<f64>>>,
 }
 
 /// civicAddressElement in a LocationConstraints informantion element
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct CivicAddressElement {
     /// Describe the content type of caValue.
     /// The value of caType shall comply with section 3.4 of IETF RFC 4776.
@@ -94,7 +94,7 @@ pub struct CivicAddressElement {
 }
 
 /// LocationConstraints information element
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct LocationConstraints {
     /// The two-letter ISO 3166 [7] country code in capital letters.
     /// Shall be present in case the "area" attribute is absent.
@@ -162,7 +162,7 @@ pub struct AppInfoList {
 }
 
 /// User application instance information within AppInfoContext.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct UserAppInstanceInfo {
     /// Identifier of the user application instance.
     /// It shall only be included in the response.
@@ -187,7 +187,7 @@ impl UserAppInstanceInfo {
 }
 
 /// appInfo field used in the AppContext message
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct AppInfoContext {
     /// Identifier of this MEC application descriptor.
     /// It is equivalent to the appDId defined in clause 6.2.1.2 of ETSI GS MEC 010-2 [1].
@@ -335,6 +335,14 @@ impl AppContext {
                 appPackageSource: None,
             },
         }
+    }
+
+    pub fn identical_except_callback_reference(&self, another: &Self) -> bool {
+        self.contextId == another.contextId
+            && self.associateDevAppId == another.associateDevAppId
+            && self.appLocationUpdates == another.appLocationUpdates
+            && self.appAutoInstantiation == another.appAutoInstantiation
+            && self.appInfo == another.appInfo
     }
 }
 

@@ -38,6 +38,8 @@ Without parameters (see command-line options with `-h`) it will look for a file 
 
 ### Execution example
 
+#### GET application list
+
 Create an example `application_list.json` file with:
 
 ```
@@ -54,4 +56,44 @@ and in another:
 
 ```
 curl -H "Content-type: application/json" http://localhost:8080/dev_app/v1/app_list
+```
+
+#### POST/PUT/DELETE AppContext
+
+Create example `application_list.json` and `app_context.json` files with:
+
+```
+cargo test test_message_application_list_to_json -- --ignored
+cargo test test_message_application_app_context -- --ignored
+```
+
+Then run in one shell:
+
+```
+target/release/lcmp
+```
+
+and in another:
+
+```
+curl -d@- -X POST -H "Content-type: application/json" http://localhost:8080/dev_app/v1/app_contexts < app_context.json | python -m json.tool > new_context.json
+```
+
+By changing the `callbackReference` in `new_context.json` you can update the context with:
+
+```
+CONTEXTID=$(grep contextId new_context.json   | cut -f 4 -d '"')
+curl -d@- -X PUT -H "Content-type: application/json" http://localhost:8080/dev_app/v1/app_contexts/$CONTEXTID < new_context.json
+```
+
+As can be seen with:
+
+```
+curl -X GET http://localhost:8080/dev_app/v1/app_contexts/$CONTEXTID
+```
+
+Finally, the context can be deleted with:
+
+```
+curl -X DELETE http://localhost:8080/dev_app/v1/app_contexts/$CONTEXTID
 ```

@@ -95,6 +95,67 @@ async fn app_contexts(data: web::Data<AppState>, body: String) -> HttpResponse {
     }
 }
 
+/// Handler for DELETE /app_contexts/{contextId}
+async fn delete_context(data: web::Data<AppState>, info: web::Path<String>) -> HttpResponse {
+    match data
+        .lcmp_server
+        .lock()
+        .unwrap()
+        .app_context()
+        .del_context(&info)
+    {
+        Ok(_) => HttpResponse::NoContent().into(),
+        Err(err) => problem_details_response(StatusCode::NOT_FOUND, err.as_str()),
+    }
+}
+
+/// Handler for UPDATE /app_contexts/{contextId}
+async fn update_context(
+    data: web::Data<AppState>,
+    body: String,
+    info: web::Path<String>,
+) -> HttpResponse {
+    let mut x: Result<AppContext, serde_json::Error> = serde_json::from_str(&body);
+    match &mut x {
+        Ok(app_context) => {
+            if let Some(context_id) = &app_context.contextId {
+                if context_id != info.as_str() {
+                    return problem_details_response(
+                        StatusCode::BAD_REQUEST,
+                        "context ID in the request does not match the path",
+                    );
+                }
+            }
+            match data
+                .lcmp_server
+                .lock()
+                .unwrap()
+                .app_context()
+                .update_context(app_context)
+            {
+                Ok(_) => HttpResponse::NoContent().into(),
+                Err(err) => problem_details_response(StatusCode::FORBIDDEN, err.as_str()),
+            }
+        }
+        Err(err) => problem_details_response(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    }
+}
+
+/// Handler for GET /app_contexts/{contextId}
+/// This method is *not* ETSI MEC standard
+async fn get_context(data: web::Data<AppState>, info: web::Path<String>) -> HttpResponse {
+    match data
+        .lcmp_server
+        .lock()
+        .unwrap()
+        .app_context()
+        .get_context(&info)
+    {
+        Ok(app_context) => ok_response(&app_context),
+        Err(err) => problem_details_response(StatusCode::NOT_FOUND, err.as_str()),
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
@@ -125,6 +186,16 @@ async fn main() -> std::io::Result<()> {
                 web::resource("/dev_app/v1/app_contexts")
                     .guard(guard::Header("content-type", "application/json"))
                     .route(web::post().to(app_contexts)),
+            )
+            .service(
+                web::resource("/dev_app/v1/app_contexts/{contextId}")
+                    .guard(guard::Header("content-type", "application/json"))
+                    .route(web::put().to(update_context)),
+            )
+            .service(
+                web::resource("/dev_app/v1/app_contexts/{contextId}")
+                    .route(web::delete().to(delete_context))
+                    .route(web::get().to(get_context)),
             )
     })
     .bind(args.address)?
