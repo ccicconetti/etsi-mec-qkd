@@ -36,6 +36,10 @@ The executable can be found as `target/release/lcmp`.
 
 Without parameters (see command-line options with `-h`) it will look for a file `application_list.json` in the current directory, which contains the list of meApps to be made available to the device apps.
 
+### Installation
+
+See the [dedicated instructions](systemd/README.md).
+
 ### Execution example
 
 #### GET application list
