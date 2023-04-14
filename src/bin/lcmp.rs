@@ -167,6 +167,24 @@ async fn main() -> std::io::Result<()> {
         ),
     });
 
+    {
+        let mut lcmp_server = state.as_ref().lcmp_server.lock().unwrap();
+        if let Err(x) = lcmp_server.application_list().status() {
+            println!(
+                "could not build ApplicationList server with args {}: {}",
+                args.app_list_type, x
+            );
+            std::process::exit(1);
+        }
+        if let Err(x) = lcmp_server.app_context().status() {
+            println!(
+                "could not build the AppContent server with args {}: {}",
+                args.app_context_type, x
+            );
+            std::process::exit(1);
+        }
+    }
+
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
     info!(

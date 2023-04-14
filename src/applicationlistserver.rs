@@ -135,6 +135,7 @@ mod tests {
 
         let a = build_application_list_server("static;file=non-existing");
         assert!(a.is_ok());
+        assert!(a.unwrap().status().is_err());
     }
 
     #[test]
