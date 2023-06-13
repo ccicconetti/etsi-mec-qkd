@@ -208,6 +208,8 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::resource("/dev_app/v1/app_contexts/{contextId}")
                     .guard(guard::Header("content-type", "application/json"))
+                    .route(web::delete().to(delete_context))
+                    .route(web::get().to(get_context))
                     .route(web::put().to(update_context)),
             )
             .service(
