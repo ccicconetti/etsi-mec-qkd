@@ -17,6 +17,8 @@ pub trait AppContextServer {
     /// Only the callbackReference is allowed to be updated. If the other
     /// fields do not match exactly, then the command is denied.
     fn update_context(&mut self, app_context: &mut AppContext) -> Result<(), String>;
+    /// Return all active contexts.
+    fn list_contexts(&mut self) -> Result<Vec<String>, String>;
     /// Return the status of the server.
     fn status(&self) -> Result<(), String>;
 }
@@ -120,6 +122,11 @@ impl AppContextServer for SingleAppContextServer {
         Err("context ID not specified in the request".to_string())
     }
 
+    /// Return all active contexts.
+    fn list_contexts(&mut self) -> Result<Vec<String>, String> {
+        Ok(self.app_contexts.iter().map(|x| x.0.to_string()).collect())
+    }
+
     /// Always return good health.
     fn status(&self) -> Result<(), String> {
         Ok(())
@@ -200,6 +207,8 @@ mod tests {
         }
         assert!(all_contexts.len() == 10);
         assert!(all_instances.len() == 10);
+        assert!(s.list_contexts().is_ok());
+        assert!(s.list_contexts().unwrap().len() == 10);
 
         // get the app contexts one by one
         for elem in &all_contexts {
@@ -217,6 +226,8 @@ mod tests {
         // delete one entry
         let a_context_id = all_contexts.iter().next().unwrap().clone().unwrap();
         s.del_context(a_context_id.as_str())?;
+        assert!(s.list_contexts().is_ok());
+        assert!(s.list_contexts().unwrap().len() == 9);
 
         // not getting that context fails, too
         assert!(&s.get_context(a_context_id.as_str()).is_err());

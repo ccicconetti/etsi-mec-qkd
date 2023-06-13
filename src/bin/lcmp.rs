@@ -9,6 +9,7 @@ use etsi_mec_qkd::lcmpserver::LcmpServer;
 use etsi_mec_qkd::messages::{AppContext, ApplicationListInfo, ProblemDetails, Validate};
 use log::info;
 use serde::__private::de::Content;
+use serde_json::json;
 use std::sync::Mutex;
 
 /// Return an HTTP response with a Problem Details body
@@ -92,6 +93,28 @@ async fn app_contexts(data: web::Data<AppState>, body: String) -> HttpResponse {
             }
         }
         Err(err) => problem_details_response(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct Contexts {
+    contexts: Vec<String>,
+}
+
+/// Handler for GET /app_contexts
+async fn list_contexts(data: web::Data<AppState>) -> HttpResponse {
+    match data
+        .lcmp_server
+        .lock()
+        .unwrap()
+        .app_context()
+        .list_contexts()
+    {
+        Ok(contexts) => {
+            let c = Contexts { contexts };
+            return ok_response(&c);
+        }
+        Err(err) => problem_details_response(StatusCode::INTERNAL_SERVER_ERROR, err.as_str()),
     }
 }
 
@@ -203,8 +226,10 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::resource("/dev_app/v1/app_contexts")
                     .guard(guard::Header("content-type", "application/json"))
+                    .route(web::get().to(list_contexts))
                     .route(web::post().to(app_contexts)),
             )
+            .service(web::resource("/dev_app/v1/app_contexts").route(web::get().to(list_contexts)))
             .service(
                 web::resource("/dev_app/v1/app_contexts/{contextId}")
                     .guard(guard::Header("content-type", "application/json"))

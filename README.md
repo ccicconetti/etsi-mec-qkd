@@ -96,6 +96,12 @@ As can be seen with:
 curl -X GET http://localhost:8080/dev_app/v1/app_contexts/$CONTEXTID
 ```
 
+You can also check the list of active contexts with the following _non-standard_ command:
+
+```
+curl -X GET http://localhost:8080/dev_app/v1/app_contexts
+```
+
 Finally, the context can be deleted with:
 
 ```
