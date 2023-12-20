@@ -192,7 +192,7 @@ pub struct AppInfoContext {
     /// Identifier of this MEC application descriptor.
     /// It is equivalent to the appDId defined in clause 6.2.1.2 of ETSI GS MEC 010-2 [1].
     /// It shall be present if the application is one in the ApplicationList.
-    appDId: Option<String>,
+    pub appDId: Option<String>,
     /// Name of the MEC application.
     /// The length of the value shall not exceed 32 characters.
     appName: String,

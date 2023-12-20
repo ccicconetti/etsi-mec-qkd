@@ -2,6 +2,7 @@
 *.dtmp
 application_list.json
 app_context.json
+reference_uri_mapping.json
 
 # Added by cargo
 

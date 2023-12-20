@@ -1,6 +1,7 @@
 //! AppContext manager of edge applications in an ETSI MEC system.
 
 use crate::messages::{AppContext, UserAppInstanceInfo};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -24,27 +25,39 @@ pub trait AppContextServer {
 }
 
 /// Accepts new contexts up to a maximum and always return the same referenceURI.
-struct SingleAppContextServer {
+struct SimpleAppContextServer {
     /// Maximum number of active contexts.
     max_contexts: usize,
-    /// Reference URI to be assigned to all application contexts.
-    reference_uri: String,
+    /// Default reference URI to be assigned to all application contexts if a specific one does not match.
+    reference_uri_default: Option<String>,
+    /// Map of reference URI by appDId
+    reference_uri_by_appdid: HashMap<String, String>,
     /// Active application contexts indexed by the context ID.
     app_contexts: HashMap<String, AppContext>,
 }
 
-impl SingleAppContextServer {
-    /// Create an SingleAppContextServer that is empty upon construction.
-    fn empty(max_contexts: usize, reference_uri: &str) -> Self {
+impl SimpleAppContextServer {
+    /// Create a SimpleAppContextServer that is empty upon construction and only uses the default reference URI.
+    fn default_empty(max_contexts: usize, reference_uri: &str) -> Self {
         Self {
             max_contexts,
-            reference_uri: reference_uri.to_string(),
+            reference_uri_default: Some(reference_uri.to_string()),
+            reference_uri_by_appdid: HashMap::new(),
+            app_contexts: HashMap::new(),
+        }
+    }
+    /// Create a SimpleAppContextServer that is empty upon construction and uses only reference URIs by AppDId.
+    fn appdid_empty(max_contexts: usize, reference_uri_by_appdid: HashMap<String, String>) -> Self {
+        Self {
+            max_contexts,
+            reference_uri_default: None,
+            reference_uri_by_appdid,
             app_contexts: HashMap::new(),
         }
     }
 }
 
-impl AppContextServer for SingleAppContextServer {
+impl AppContextServer for SimpleAppContextServer {
     /// If the maximum number of contexts is exceeded, the command is rejected.
     /// Otherwise the static reference URI is returned upon accepting the next context.
     fn new_context(&mut self, app_context: &mut AppContext) -> Result<(), String> {
@@ -65,14 +78,42 @@ impl AppContextServer for SingleAppContextServer {
         // Accept the incoming request
         //
 
+        // Find the reference URI for this request.
+        let mut reference_uri = None;
+        if let Some(appdid) = &app_context.appInfo.appDId {
+            if let Some(uri) = self.reference_uri_by_appdid.get(appdid) {
+                reference_uri = Some(uri.clone());
+            }
+        }
+
+        // If no match found, use the default reference URI, if defined.
+        if reference_uri.is_none() && self.reference_uri_default.is_some() {
+            reference_uri = Some(self.reference_uri_default.clone().unwrap());
+        }
+
+        // Return an error if it was not possible to return a reference URI.
+        if reference_uri.is_none() {
+            return Err(format!(
+                "It was not possible to find a matching reference URI for AppDId: {}",
+                app_context
+                    .appInfo
+                    .appDId
+                    .clone()
+                    .unwrap_or("unspecified".to_string())
+            ));
+        }
+
         // Assign a new random context id.
         app_context.contextId = Some(Uuid::simple(Uuid::new_v4()).to_string());
 
         // Assign the app instance id and the reference URI.
+
         app_context
             .appInfo
             .userAppInstanceInfo
-            .push(UserAppInstanceInfo::from_reference_uri(&self.reference_uri));
+            .push(UserAppInstanceInfo::from_reference_uri(
+                &reference_uri.unwrap(),
+            ));
 
         // Add to the list of active contexts.
         self.app_contexts
@@ -133,17 +174,31 @@ impl AppContextServer for SingleAppContextServer {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ReferenceUriMapByAppDIdElem {
+    pub appdid: String,
+    pub reference_uri: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SimpleAppContextServerConf {
+    max_contexts: usize,
+    mapping: Vec<ReferenceUriMapByAppDIdElem>,
+}
+
 /// Factory to build ApplicationListServer objects from a string
 pub fn build_app_context_server(
     value: &str,
 ) -> Result<Box<dyn AppContextServer + Send + Sync>, String> {
+    log::info!("XXX");
     if let Some(x) = value.find("single;") {
+        log::info!("XXX");
         if x == 0 {
             let tokens: Vec<String> = value[7..].split(",").map(|x| x.to_string()).collect();
             if tokens.len() == 2 {
                 if let Ok(x) = tokens[0].parse::<usize>() {
                     if !tokens[1].is_empty() {
-                        return Ok(Box::new(SingleAppContextServer::empty(
+                        return Ok(Box::new(SimpleAppContextServer::default_empty(
                             x,
                             tokens[1].as_str(),
                         )));
@@ -151,7 +206,37 @@ pub fn build_app_context_server(
                 }
             }
         }
+    } else if let Some(x) = value.find("file;") {
+        log::info!("XXX");
+        if x == 0 && value.len() >= 6 {
+            let filename = value[5..].to_string();
+            let res = std::fs::File::open(&filename);
+            match res {
+                Ok(mut file) => {
+                    let mut content: String = String::new();
+                    let _ = std::io::Read::read_to_string(&mut file, &mut content);
+                    let res: Result<SimpleAppContextServerConf, serde_json::Error> =
+                        serde_json::from_str(content.as_str());
+                    if let Ok(conf) = res {
+                        let mut reference_uri_by_appdid = HashMap::new();
+                        for elem in conf.mapping {
+                            reference_uri_by_appdid.insert(elem.appdid, elem.reference_uri);
+                        }
+                        return Ok(Box::new(SimpleAppContextServer::appdid_empty(
+                            conf.max_contexts,
+                            reference_uri_by_appdid,
+                        )));
+                    } else {
+                        return Err(format!("invalid input file: {}", &filename));
+                    }
+                }
+                Err(err) => {
+                    return Err(format!("could not read from file '{}': {}", &filename, err));
+                }
+            }
+        }
     }
+    log::info!("XXX");
     Err("could not create the AppContextServer".to_string())
 }
 
@@ -175,8 +260,29 @@ mod tests {
     }
 
     #[test]
-    fn test_single_app_context_server() -> Result<(), String> {
-        let mut s = SingleAppContextServer::empty(10, "referenceURI");
+    #[ignore]
+    fn test_create_example_simple_app_context_server_json() {
+        let mut conf = SimpleAppContextServerConf {
+            max_contexts: 10,
+            mapping: vec![],
+        };
+        conf.mapping.push(ReferenceUriMapByAppDIdElem {
+            appdid: "1".to_string(),
+            reference_uri: "uri1".to_string(),
+        });
+        conf.mapping.push(ReferenceUriMapByAppDIdElem {
+            appdid: "2".to_string(),
+            reference_uri: "uri2".to_string(),
+        });
+        let res = std::fs::File::create("reference_uri_mapping.json");
+        if let Ok(file) = res {
+            assert!(serde_json::to_writer(file, &conf).is_ok());
+        }
+    }
+
+    #[test]
+    fn test_simple_app_context_server() -> Result<(), String> {
+        let mut s = SimpleAppContextServer::default_empty(10, "referenceURI");
 
         s.status()?;
 
