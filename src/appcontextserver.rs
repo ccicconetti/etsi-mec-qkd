@@ -190,9 +190,7 @@ pub struct SimpleAppContextServerConf {
 pub fn build_app_context_server(
     value: &str,
 ) -> Result<Box<dyn AppContextServer + Send + Sync>, String> {
-    log::info!("XXX");
     if let Some(x) = value.find("single;") {
-        log::info!("XXX");
         if x == 0 {
             let tokens: Vec<String> = value[7..].split(",").map(|x| x.to_string()).collect();
             if tokens.len() == 2 {
@@ -207,7 +205,6 @@ pub fn build_app_context_server(
             }
         }
     } else if let Some(x) = value.find("file;") {
-        log::info!("XXX");
         if x == 0 && value.len() >= 6 {
             let filename = value[5..].to_string();
             let res = std::fs::File::open(&filename);
@@ -236,7 +233,6 @@ pub fn build_app_context_server(
             }
         }
     }
-    log::info!("XXX");
     Err("could not create the AppContextServer".to_string())
 }
 
