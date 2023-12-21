@@ -107,3 +107,29 @@ Finally, the context can be deleted with:
 ```
 curl -X DELETE http://localhost:8080/dev_app/v1/app_contexts/$CONTEXTID
 ```
+
+### Multiple reference URI
+
+In the default mode the LCMP always returns the same reference URI as specified by the command-line option `--app-context-type`.
+
+Another mode exists where the user provides a mapping between the AppDId and the reference URI to be returned in a JSON file.
+
+To enable this mode `lcmp` must be passed the option `--app-context-type "file;reference_uri_mapping.json`.
+
+An example of `reference_uri_mapping.json` for two possible AppDId (`my_app_1` and `my_app_2`) follows:
+
+```json
+{
+    "max_contexts": 10,
+    "mapping": [
+        {
+            "appdid": "my_app_1",
+            "reference_uri": "http://uri1.mydomain.com/"
+        },
+        {
+            "appdid": "my_app_2",
+            "reference_uri": "http://uri2.mydomain.com/"
+        }
+    ]
+}
+```
